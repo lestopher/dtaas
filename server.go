@@ -14,6 +14,7 @@ type RoomMessage struct {
 
 type Item struct {
 	Message       Message `json:"message"`
+	Room          Room    `json:"room"`
 	OauthClientId string  `json:"oauth_client_id"`
 	WebhookId     string  `json:"webhook_id"`
 }
@@ -29,18 +30,16 @@ type Message struct {
 		MentionName string `json:"mention_name"`
 		Name        string `json:"name"`
 	} `json:"from"`
-	Id       int32 `json:"id"`
-	Mentions []struct {
-		Mention Mention
-	} `json:"mentions"`
-	Message string `json:"message"`
+	Id       int32     `json:"id"`
+	Mentions []Mention `json:"mentions"`
+	Message  string    `json:"message"`
 }
 
 type Mention struct {
 	Id    int32 `json:"id"`
 	Links struct {
 		Self string `json:"self"`
-	}
+	} `json:"links"`
 	MentionName string `json:"mention_name"`
 	Name        string `json:"name"`
 }
