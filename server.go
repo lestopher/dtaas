@@ -3,11 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"github.com/gorilla/mux"
 	"github.com/lestopher/hipchat-webhooks/room_message"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
+	"net/http/fcgi"
 	"os"
 	"strconv"
 )
@@ -17,19 +20,53 @@ var oauthToken string
 var delTacoCounter int
 var room_notification string
 
+var (
+	local = flag.String("local", "", "serve as webserver, example: 0.0.0.0:8000")
+	tcp   = flag.String("tcp", "", "serve as FCGI via TCP, example: 0.0.0.0:8000")
+	unix  = flag.String("unix", "", "serve as FCGI via UNIX socket, example /tmp/myprogram.sock")
+)
+
 func main() {
+	var err error
+
+	flag.Parse()
 	oauthToken = os.Getenv("HC_OAUTH_TOKEN")
 
 	if len(oauthToken) < 1 {
-		log.Fatalln("Envionrment variable HC_OAUTH_TOKEN wasn't set")
+		log.Fatalln("Environment variable HC_OAUTH_TOKEN wasn't set")
 	}
 
 	room_notification = "https://api.hipchat.com/v2/room/447199/notification?auth_token=" + oauthToken
 	r := mux.NewRouter()
 	r.HandleFunc("/deltaco", DelTacoHandler).Methods("POST")
-	http.Handle("/", r)
-	log.Println("Listening on http://localhost:8888")
-	http.ListenAndServe(":8888", nil)
+
+	// The following is ripped from http://www.dav-muz.net/blog/2013/09/how-to-use-go-and-fastcgi/
+	if *local != "" {
+		err = http.ListenAndServe(*local, r)
+		// Not sure if we need the following for http anymore
+		// http.Handle("/", r)
+	} else if *tcp != "" {
+		listener, err := net.Listen("tcp", *tcp)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer listener.Close()
+
+		err = fcgi.Serve(listener, r)
+	} else if *unix != "" { // Run as FCGI via UNIX socket
+		listener, err := net.Listen("unix", *unix)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer listener.Close()
+
+		err = fcgi.Serve(listener, r)
+	} else { // Run as FCGI via standard I/O
+		err = fcgi.Serve(nil, r)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func DelTacoHandler(rw http.ResponseWriter, r *http.Request) {
