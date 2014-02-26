@@ -24,6 +24,7 @@ var (
 	local = flag.String("local", "", "serve as webserver, example: 0.0.0.0:8000")
 	tcp   = flag.String("tcp", "", "serve as FCGI via TCP, example: 0.0.0.0:8000")
 	unix  = flag.String("unix", "", "serve as FCGI via UNIX socket, example /tmp/myprogram.sock")
+	token = flag.String("token", "", "oauth token")
 )
 
 func main() {
@@ -33,7 +34,11 @@ func main() {
 	oauthToken = os.Getenv("HC_OAUTH_TOKEN")
 
 	if len(oauthToken) < 1 {
-		log.Fatalln("Environment variable HC_OAUTH_TOKEN wasn't set")
+		if *token != "" {
+			oauthToken = *token
+		} else {
+			log.Fatalln("Environment variable HC_OAUTH_TOKEN wasn't set")
+		}
 	}
 
 	room_notification = "https://api.hipchat.com/v2/room/447199/notification?auth_token=" + oauthToken
