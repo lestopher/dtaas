@@ -25,7 +25,6 @@ const cmdPrefix = "/giphy"
 // Global so that we can invoke from handler
 var oauthToken string
 var delTacoCounter int
-var room_notification string
 
 var (
 	local = flag.String("local", "", "serve as webserver, example: 0.0.0.0:8000")
@@ -48,7 +47,6 @@ func main() {
 		}
 	}
 
-	room_notification = "https://api.hipchat.com/v2/room/447199/notification?auth_token=" + oauthToken
 	r := mux.NewRouter()
 	r.HandleFunc("/deltaco", DelTacoHandler).Methods("POST")
 	r.HandleFunc("/gifsearch", GifSearchHandler).Methods("POST")
@@ -113,14 +111,15 @@ func DelTacoHandler(rw http.ResponseWriter, r *http.Request) {
 		Notify:        false,
 	}
 
-	go NotifyRoom(n)
+	go NotifyRoom(n, res.Item.Room.Id)
 
 	log.Printf("%v\n", res)
 	rw.WriteHeader(http.StatusNoContent)
 }
 
-func NotifyRoom(n room_message.RoomNotification) {
+func NotifyRoom(n room_message.RoomNotification, id int32) {
 
+	roomURL := fmt.Sprintf("https://api.hipchat.com/v2/room/%d/notification?auth_token=%s", id, oauthToken)
 	b, errJson := json.Marshal(n)
 
 	if errJson != nil {
@@ -130,7 +129,7 @@ func NotifyRoom(n room_message.RoomNotification) {
 
 	log.Println(string(b))
 
-	res, err := http.Post(room_notification, "application/json", bytes.NewBuffer(b))
+	res, err := http.Post(roomURL, "application/json", bytes.NewBuffer(b))
 	defer res.Body.Close()
 
 	if err != nil {
@@ -188,6 +187,6 @@ func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 		Notify:        true,
 	}
 
-	go NotifyRoom(n)
+	go NotifyRoom(n, rm.Item.Room.Id)
 	rw.WriteHeader(http.StatusNoContent)
 }
