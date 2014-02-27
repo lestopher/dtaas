@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
-	g "github.com/lestopher/giphy"
+	g "github.com/lestopher/gophy"
 	"github.com/lestopher/hipchat-webhooks/room_message"
 	"io"
 	"io/ioutil"
