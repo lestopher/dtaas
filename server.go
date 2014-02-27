@@ -4,17 +4,23 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"github.com/gorilla/mux"
-	//"github.com/lestopher/giphy"
+	g "github.com/lestopher/giphy"
 	"github.com/lestopher/hipchat-webhooks/room_message"
+	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/fcgi"
+	"net/url"
 	"os"
 	"strconv"
 )
+
+const cmdPrefix = "/giphy"
 
 // Global so that we can invoke from handler
 var oauthToken string
@@ -45,13 +51,11 @@ func main() {
 	room_notification = "https://api.hipchat.com/v2/room/447199/notification?auth_token=" + oauthToken
 	r := mux.NewRouter()
 	r.HandleFunc("/deltaco", DelTacoHandler).Methods("POST")
-	r.HandleFunc("/gifsearch", GifSearchHandler).Methods("GET")
+	r.HandleFunc("/gifsearch", GifSearchHandler).Methods("POST")
 
 	// The following is ripped from http://www.dav-muz.net/blog/2013/09/how-to-use-go-and-fastcgi/
 	if *local != "" {
 		err = http.ListenAndServe(*local, r)
-		// Not sure if we need the following for http anymore
-		// http.Handle("/", r)
 	} else if *tcp != "" {
 		listener, err := net.Listen("tcp", *tcp)
 		if err != nil {
@@ -76,16 +80,28 @@ func main() {
 	}
 }
 
-func DelTacoHandler(rw http.ResponseWriter, r *http.Request) {
-	log.Println("Yay, I got a request.")
-
-	decoder := json.NewDecoder(r.Body)
+func bodyToRoomMessage(r io.Reader) (*room_message.RoomMessage, error) {
+	decoder := json.NewDecoder(r)
 	var res room_message.RoomMessage
 
 	err := decoder.Decode(&res)
 
 	if err != nil {
-		log.Fatalf("OMG, messed up decoding\n%s", err)
+		log.Printf("OMG, messed up decoding\n%s", err)
+		return nil, err
+	}
+
+	return &res, nil
+}
+
+func DelTacoHandler(rw http.ResponseWriter, r *http.Request) {
+	log.Println("DelTacoHandler, is handling.")
+
+	res, err := bodyToRoomMessage(r.Body)
+
+	if err != nil {
+		log.Println("**ERROR** bodyToRoomMessage failed in DelTacoHandler")
+		rw.WriteHeader(http.StatusInternalServerError)
 	}
 
 	delTacoCounter++
@@ -94,6 +110,7 @@ func DelTacoHandler(rw http.ResponseWriter, r *http.Request) {
 		Color:         "yellow",
 		Message:       "(deltaco) Del Taco (deltaco) has been mentioned " + strconv.Itoa(delTacoCounter) + " times.",
 		MessageFormat: "text",
+		Notify:        false,
 	}
 
 	go NotifyRoom(n)
@@ -129,5 +146,48 @@ func NotifyRoom(n room_message.RoomNotification) {
 }
 
 func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
+	log.Printf("Gif me.")
 
+	rm, err := bodyToRoomMessage(r.Body)
+
+	if err != nil {
+		log.Println("**ERROR** bodyToRoomMessage failed in GifSearchHandler")
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Our search query
+	q := rm.Item.Message.Message[len(cmdPrefix):]
+	searchGiphy := fmt.Sprintf("%s?q=%s&api_key=dc6zaTOxFJmzC", g.GIPHY_API, url.QueryEscape(q))
+
+	res, err := http.Get(searchGiphy)
+	if err != nil {
+		log.Println(err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	defer res.Body.Close()
+	giphyResp := &struct{ Data []g.GiphyGif }{}
+	dec := json.NewDecoder(res.Body)
+	if err := dec.Decode(giphyResp); err != nil {
+		log.Println(err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	msg := "NO RESULTS. THAT'S RACIST."
+	if len(giphyResp.Data) > 0 {
+		msg = fmt.Sprintf("%s: %s", q, giphyResp.Data[rand.Intn(len(giphyResp.Data))].Images.Original.URL)
+	}
+
+	n := room_message.RoomNotification{
+		Color:         "purple",
+		Message:       msg,
+		MessageFormat: "text",
+		Notify:        true,
+	}
+
+	go NotifyRoom(n)
+	rw.WriteHeader(http.StatusNoContent)
 }
