@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"github.com/gorilla/mux"
+	//"github.com/lestopher/giphy"
 	"github.com/lestopher/hipchat-webhooks/room_message"
 	"io/ioutil"
 	"log"
@@ -44,6 +45,7 @@ func main() {
 	room_notification = "https://api.hipchat.com/v2/room/447199/notification?auth_token=" + oauthToken
 	r := mux.NewRouter()
 	r.HandleFunc("/deltaco", DelTacoHandler).Methods("POST")
+	r.HandleFunc("/gifsearch", GifSearchHandler).Methods("GET")
 
 	// The following is ripped from http://www.dav-muz.net/blog/2013/09/how-to-use-go-and-fastcgi/
 	if *local != "" {
@@ -87,24 +89,20 @@ func DelTacoHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	delTacoCounter++
-	go NotifyRoom()
+
+	n := room_message.RoomNotification{
+		Color:         "yellow",
+		Message:       "(deltaco) Del Taco (deltaco) has been mentioned " + strconv.Itoa(delTacoCounter) + " times.",
+		MessageFormat: "text",
+	}
+
+	go NotifyRoom(n)
 
 	log.Printf("%v\n", res)
 	rw.WriteHeader(http.StatusNoContent)
 }
 
-func NotifyRoom() {
-	type RoomNotification struct {
-		Color         string `json:"color"`
-		Message       string `json:"message"`
-		MessageFormat string `json:"message_format"`
-	}
-
-	n := RoomNotification{
-		Color:         "yellow",
-		Message:       "(deltaco) Del Taco (deltaco) has been mentioned " + strconv.Itoa(delTacoCounter) + " times.",
-		MessageFormat: "text",
-	}
+func NotifyRoom(n room_message.RoomNotification) {
 
 	b, errJson := json.Marshal(n)
 
@@ -128,4 +126,8 @@ func NotifyRoom() {
 		log.Println("error reading response body", errReadBody)
 	}
 	log.Println("response: ", body)
+}
+
+func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
+
 }
