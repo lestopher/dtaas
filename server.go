@@ -20,6 +20,7 @@ import (
 	"strconv"
 )
 
+// Sets up our command prefix as /giphy, but really it could be whatever you wanted
 const cmdPrefix = "/giphy"
 
 // Global so that we can invoke from handler
@@ -37,6 +38,7 @@ func main() {
 	var err error
 
 	flag.Parse()
+	// TODO: Determine if I still want to get it by looking at os variables
 	oauthToken = os.Getenv("HC_OAUTH_TOKEN")
 
 	if len(oauthToken) < 1 {
@@ -50,6 +52,7 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/deltaco", DelTacoHandler).Methods("POST")
 	r.HandleFunc("/gifsearch", GifSearchHandler).Methods("POST")
+	r.HandleFunc("/deploy", DeployHandler).Methods("POST")
 
 	// The following is ripped from http://www.dav-muz.net/blog/2013/09/how-to-use-go-and-fastcgi/
 	if *local != "" {
@@ -78,10 +81,15 @@ func main() {
 	}
 }
 
+/**
+ * Decodes an io.Reader, usually from the http response into a RoomMessage struct
+ * @param r [io.Reader] the Reader type to decode into RoomMessage
+ * @return *RoomMessage decoded reader stream
+ * @return error should be nil if no errors
+ */
 func bodyToRoomMessage(r io.Reader) (*room_message.RoomMessage, error) {
-	decoder := json.NewDecoder(r)
 	var res room_message.RoomMessage
-
+	decoder := json.NewDecoder(r)
 	err := decoder.Decode(&res)
 
 	if err != nil {
@@ -92,6 +100,13 @@ func bodyToRoomMessage(r io.Reader) (*room_message.RoomMessage, error) {
 	return &res, nil
 }
 
+/**
+ * Takes care of messages posted to /deltaco. It keeps an in-memory counter
+ * of how many times deltaco is mentioned. CAVEAT - deltaco is not persisted
+ * @param rw [http.ResponseWriter] the stream to write to for responses
+ * @param r  [*http.Request] the request that came in
+ * @return none
+ */
 func DelTacoHandler(rw http.ResponseWriter, r *http.Request) {
 	log.Println("DelTacoHandler, is handling.")
 
@@ -102,6 +117,9 @@ func DelTacoHandler(rw http.ResponseWriter, r *http.Request) {
 		rw.WriteHeader(http.StatusInternalServerError)
 	}
 
+	// Every time this handler is called, we increment delTacoCounter, as the
+	// webhook that responded to us, is supposed to do the heavy lifting with
+	// the regex pattern
 	delTacoCounter++
 
 	n := room_message.RoomNotification{
@@ -111,14 +129,20 @@ func DelTacoHandler(rw http.ResponseWriter, r *http.Request) {
 		Notify:        false,
 	}
 
+	// Notify the room asynchronously
 	go NotifyRoom(n, res.Item.Room.Id)
 
 	log.Printf("%v\n", res)
 	rw.WriteHeader(http.StatusNoContent)
 }
 
+/**
+ * Hipchat room gets the message
+ * @param n [room_message.RoomNotification] imported from package gophy, data to send
+ * @param id [int32] the id of the hipchat room
+ * @return none
+ */
 func NotifyRoom(n room_message.RoomNotification, id int32) {
-
 	roomURL := fmt.Sprintf("https://api.hipchat.com/v2/room/%d/notification?auth_token=%s", id, oauthToken)
 	b, errJson := json.Marshal(n)
 
@@ -127,15 +151,16 @@ func NotifyRoom(n room_message.RoomNotification, id int32) {
 		return
 	}
 
+	// TODO: do we need to print this? is it important?
 	log.Println(string(b))
 
 	res, err := http.Post(roomURL, "application/json", bytes.NewBuffer(b))
-	defer res.Body.Close()
 
 	if err != nil {
 		log.Println("issue posting", err)
 	}
 
+	defer res.Body.Close()
 	body, errReadBody := ioutil.ReadAll(res.Body)
 
 	if errReadBody != nil {
@@ -144,6 +169,12 @@ func NotifyRoom(n room_message.RoomNotification, id int32) {
 	log.Println("response: ", body)
 }
 
+/**
+ * Handles request to query giphy
+ * @param rw [http.ResponseWriter] the stream to write to for responses
+ * @param r  [*http.Request] the request that came in
+ * @return none
+ */
 func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 	log.Printf("Gif me.")
 
@@ -154,6 +185,8 @@ func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	defer r.Body.Close()
 
 	// Our search query
 	q := rm.Item.Message.Message[len(cmdPrefix):]
@@ -167,8 +200,10 @@ func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	defer res.Body.Close()
+
 	giphyResp := &struct{ Data []g.GiphyGif }{}
 	dec := json.NewDecoder(res.Body)
+
 	if err := dec.Decode(giphyResp); err != nil {
 		log.Println(err)
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -176,6 +211,7 @@ func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := "NO RESULTS. THAT'S RACIST."
+
 	if len(giphyResp.Data) > 0 {
 		msg = fmt.Sprintf("%s: %s", q, giphyResp.Data[rand.Intn(len(giphyResp.Data))].Images.Original.URL)
 	}
@@ -189,4 +225,13 @@ func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 
 	go NotifyRoom(n, rm.Item.Room.Id)
 	rw.WriteHeader(http.StatusNoContent)
+}
+
+/**
+ * Tells you the status of a depoy
+ * @param rw [http.ResponseWriter] the stream to write to for responses
+ * @param r  [*http.Request] the request that came in
+ * @return none
+ */
+func DeployHandler(rw http.ResponseWriter, r *http.Request) {
 }
