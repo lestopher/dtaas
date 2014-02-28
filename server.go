@@ -38,7 +38,7 @@ type DeployMessage struct {
 	Env      string `json:"env"`
 	Status   string `json:"status"`
 	Location string `json:"location"`
-	RoomId   int32  `json:"int32"`
+	RoomId   int32  `json:"room_id"`
 }
 
 func main() {
@@ -235,7 +235,14 @@ func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 /**
- * Tells you the status of a depoy
+ * Tells you the status of a deploy
+ * Expects:
+ * {
+ *  "env"      : "staging",
+ *  "status"   : "starting",
+ *  "location" : "bamboo", // Could also be... "staging"
+ *  "room_id"  : 12345
+ * }
  * @param rw [http.ResponseWriter] the stream to write to for responses
  * @param r  [*http.Request] the request that came in
  * @return none
