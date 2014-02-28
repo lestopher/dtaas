@@ -34,6 +34,13 @@ var (
 	token = flag.String("token", "", "oauth token")
 )
 
+type DeployMessage struct {
+	Env      string `json:"env"`
+	Status   string `json:"status"`
+	Location string `json:"location"`
+	RoomId   int32  `json:"int32"`
+}
+
 func main() {
 	var err error
 
@@ -191,8 +198,8 @@ func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 	// Our search query
 	q := rm.Item.Message.Message[len(cmdPrefix):]
 	searchGiphy := fmt.Sprintf("%s?q=%s&api_key=dc6zaTOxFJmzC", g.GIPHY_API, url.QueryEscape(q))
-
 	res, err := http.Get(searchGiphy)
+
 	if err != nil {
 		log.Println(err)
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -234,4 +241,48 @@ func GifSearchHandler(rw http.ResponseWriter, r *http.Request) {
  * @return none
  */
 func DeployHandler(rw http.ResponseWriter, r *http.Request) {
+	log.Printf("Deploy time buddy.")
+
+	var dm DeployMessage
+	var msg string
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&dm)
+
+	if err != nil {
+		log.Println("**ERROR** bodyToRoomMessage failed in DeployHandler")
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	defer r.Body.Close()
+
+	color := colorPicker(dm.Status)
+
+	if dm.Status == "beginning" {
+		msg = fmt.Sprintf("%s deploy in %s on %s", dm.Status, dm.Env, dm.Location)
+	} else {
+		msg = fmt.Sprintf("deploy in %s on %s: %s", dm.Env, dm.Location, dm.Status)
+	}
+
+	n := room_message.RoomNotification{
+		Color:         color,
+		Message:       msg,
+		MessageFormat: "text",
+		Notify:        true,
+	}
+
+	go NotifyRoom(n, dm.RoomId)
+	rw.WriteHeader(http.StatusNoContent)
+}
+
+func colorPicker(s string) string {
+	switch {
+	case s == "success":
+		return "green"
+	case s == "fail":
+		return "red"
+	case s == "beginning":
+		return "yellow"
+	}
+	return "yellow"
 }
