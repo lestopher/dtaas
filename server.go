@@ -341,22 +341,16 @@ func colorPicker(s string) string {
 // SlackGifSearchHandler responds to a request for a specific giphy tag
 func SlackGifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 	log.Printf("SlackGifSearchHandler")
+	r.ParseForm()
+	text := r.Form.Get("text")
 
-	var s SlackOutgoingWebhook
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&s)
-
-	defer r.Body.Close()
-
-	if err != nil {
-		log.Println("**ERROR** decoding r.Body failed in SlackGifSearchHandler")
-		log.Println(err)
-		log.Println(decoder)
+	if len(text) < 1 {
+		log.Println("**ERROR** text parameter does not exist")
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	msg, err := searchGiphy(s.Text[1:])
+	msg, err := searchGiphy(text[1:])
 
 	if err != nil {
 		rw.WriteHeader(http.StatusInternalServerError)
