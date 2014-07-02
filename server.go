@@ -41,47 +41,10 @@ type DeployMessage struct {
 	RoomId   int32  `json:"room_id"`
 }
 
-/*
-{
-    "type": "message",
-    "subtype": "bot_message",
-    "ts": "1358877455.000010",
-    "text": "[SlackClientSpec/master] added presence to users for login message - Cal Henderson
-        (https://github.com/tinyspeck/SlackClientSpec/commit/82276fd02393e0571c38289ab887ed84f92a9519)",
-    "bot_id": "BB12033", // optional bot id that defines the name and icons to use for this message
-    "username": "github", // optional name for the bot to "speak" as, should only be used if `bot_id` is not present
-    "icons": {} // optional hash of icons to use for displaying the bot (overrides what is set in `bot_id`)
-}
-*/
-type SlackBotMessage struct {
-	Type     string
-	Subtype  string
-	Text     string
-	BotID    string `json:"bot_id"`
-	Username string
-	icons    struct{}
-}
-
-// token=WBsmRdinTWNdTC7p5NfnDlUZ
-// team_id=T0001
-// channel_id=C2147483705
-// channel_name=test
-// timestamp=1355517523.000005
-// user_id=U2147483697
-// user_name=Steve
-// text=googlebot: What is the air-speed velocity of an unladen swallow?
-// trigger_word=googlebot:
-
-// SlackOutgoingWebhook represents the incoming message from Slack
-type SlackOutgoingWebhook struct {
-	Token       string
-	TeamID      string `json:"team_id"`
-	ChannelID   string `json:"channel_id"`
-	ChannelName string `json:"channel_name"`
-	UserID      string `json:"user_id"`
-	UserName    string `json:"user_name"`
-	Text        string
-	TriggerWord string `json:"trigger_word"`
+// SlackResponse is returned to the caller so that it returns prints the message
+// in the app
+type SlackResponse struct {
+	Text string `json:"text"`
 }
 
 func main() {
@@ -360,9 +323,12 @@ func SlackGifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Content-Type", "application/json")
 
 	enc := json.NewEncoder(rw)
-	payload := &struct{ Text string }{msg}
+	payload := &SlackResponse{Text: msg}
+
+	log.Println(payload)
 
 	if err = enc.Encode(&payload); err != nil {
+		log.Println("**ERROR** encoding response failed")
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
