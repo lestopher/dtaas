@@ -41,6 +41,49 @@ type DeployMessage struct {
 	RoomId   int32  `json:"room_id"`
 }
 
+/*
+{
+    "type": "message",
+    "subtype": "bot_message",
+    "ts": "1358877455.000010",
+    "text": "[SlackClientSpec/master] added presence to users for login message - Cal Henderson
+        (https://github.com/tinyspeck/SlackClientSpec/commit/82276fd02393e0571c38289ab887ed84f92a9519)",
+    "bot_id": "BB12033", // optional bot id that defines the name and icons to use for this message
+    "username": "github", // optional name for the bot to "speak" as, should only be used if `bot_id` is not present
+    "icons": {} // optional hash of icons to use for displaying the bot (overrides what is set in `bot_id`)
+}
+*/
+type SlackBotMessage struct {
+	Type     string
+	Subtype  string
+	Text     string
+	BotID    string `json:"bot_id"`
+	Username string
+	icons    struct{}
+}
+
+// token=WBsmRdinTWNdTC7p5NfnDlUZ
+// team_id=T0001
+// channel_id=C2147483705
+// channel_name=test
+// timestamp=1355517523.000005
+// user_id=U2147483697
+// user_name=Steve
+// text=googlebot: What is the air-speed velocity of an unladen swallow?
+// trigger_word=googlebot:
+
+// SlackOutgoingWebhook represents the incoming message from Slack
+type SlackOutgoingWebhook struct {
+	Token       string
+	TeamID      string `json:"team_id"`
+	ChannelID   string `json:"channel_id"`
+	ChannelName string `json:"channel_name"`
+	UserID      string `json:"user_id"`
+	UserName    string `json:"user_name"`
+	Text        string
+	TriggerWord string `json:"trigger_word"`
+}
+
 func main() {
 	var err error
 
@@ -60,6 +103,7 @@ func main() {
 	r.HandleFunc("/deltaco", DelTacoHandler).Methods("POST")
 	r.HandleFunc("/gifsearch", GifSearchHandler).Methods("POST")
 	r.HandleFunc("/deploy", DeployHandler).Methods("POST")
+	r.HandleFunc("/slack/gifsearch", SlackGifSearchHandler).Methods("POST")
 
 	// The following is ripped from http://www.dav-muz.net/blog/2013/09/how-to-use-go-and-fastcgi/
 	if *local != "" {
@@ -292,4 +336,72 @@ func colorPicker(s string) string {
 		return "yellow"
 	}
 	return "yellow"
+}
+
+// SlackGifSearchHandler responds to a request for a specific giphy tag
+func SlackGifSearchHandler(rw http.ResponseWriter, r *http.Request) {
+	log.Printf("SlackGifSearchHandler")
+
+	var s SlackOutgoingWebhook
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&s)
+
+	defer r.Body.Close()
+
+	if err != nil {
+		log.Println("**ERROR** decoding r.Body failed in SlackGifSearchHandler")
+		log.Println(err)
+		log.Println(decoder)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	msg, err := searchGiphy(s.Text[1:])
+
+	if err != nil {
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	rw.Header().Set("Content-Type", "application/json")
+
+	enc := json.NewEncoder(rw)
+	payload := &struct{ Text string }{msg}
+
+	if err = enc.Encode(&payload); err != nil {
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func searchGiphy(query string) (string, error) {
+	// Our search query
+	searchGiphy := fmt.Sprintf(
+		"%s?q=%s&api_key=dc6zaTOxFJmzC", g.GIPHY_API, url.QueryEscape(query))
+
+	res, err := http.Get(searchGiphy)
+
+	if err != nil {
+		log.Println(err)
+		return ":finnadie:", err
+	}
+
+	defer res.Body.Close()
+
+	giphyResp := &struct{ Data []g.GiphyGif }{}
+	dec := json.NewDecoder(res.Body)
+
+	if err := dec.Decode(giphyResp); err != nil {
+		log.Println(err)
+		return ":finnadie:", err
+	}
+
+	msg := ":rage2:"
+
+	if len(giphyResp.Data) > 0 {
+		msg = fmt.Sprintf("%s: %s",
+			query, giphyResp.Data[rand.Intn(len(giphyResp.Data))].Images.Original.URL)
+	}
+
+	return msg, nil
 }
