@@ -306,6 +306,7 @@ func SlackGifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 	log.Printf("SlackGifSearchHandler")
 	r.ParseForm()
 	text := r.Form.Get("text")
+	triggerWord := r.Form.Get("trigger_word")
 
 	if len(text) < 1 {
 		log.Println("**ERROR** text parameter does not exist")
@@ -313,7 +314,13 @@ func SlackGifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := searchGiphy(text[1:])
+	if len(triggerWord) < 1 {
+		log.Println("**ERROR** text parameter does not exist")
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	msg, err := searchGiphy(text[len(triggerWord):])
 
 	if err != nil {
 		rw.WriteHeader(http.StatusInternalServerError)
