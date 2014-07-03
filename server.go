@@ -342,6 +342,7 @@ func SlackGifSearchHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func searchGiphy(query string) (string, error) {
+	log.Println("giphy searching for", query)
 	// Our search query
 	searchGiphy := fmt.Sprintf(
 		"%s?q=%s&api_key=dc6zaTOxFJmzC", g.GIPHY_API, url.QueryEscape(query))
